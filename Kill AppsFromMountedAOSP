@@ -1,0 +1,124 @@
+#!/bin/bash
+
+#Usage:
+#sudo bash kill_AppsFromImage.sh
+
+DEVICES=$(adb devices | grep "device$" | sed -e "s|device||g")
+if [ "$DEVICES" = "" ]; then
+	echo "No Devices over adb detected"
+fi
+echo ""
+echo "Detected $DEVICES on adb"
+echo ""
+
+
+if [ -d "Image" ]; then
+	if [ ! "$(ls -A Image)" ]; then
+		echo ""
+		echo "------------------------------"
+		echo "Image is empty!"
+		echo "Mount Image."
+		echo "------------------------------"
+		exit
+	fi
+fi
+
+if [ "$(whoami)" != "root" ]; then
+	echo  "You are not root!!!"
+	echo "Usage:"
+	echo "sudo bash kill_AppsFromImage.sh"
+	exit
+fi
+
+echo "remove google apps? y/n"
+read
+if [ "${REPLY}" = "y" ]; then 
+	rm -rf Image/system/app/EasterEgg ; echo "Remove Easteregg";
+	rm -rf Image/system/app/HTMLViewer ; echo "Remove HTMLViewer";
+	rm -rf Image/system/app/PrintSpooler ; echo "Remove Printspooler";
+	rm -rf Image/system/priv-app/AudioFX ; echo "Remove AudioFX";
+	rm -rf Image/system/system_ext/priv-app/AudioFX ;
+	rm -rf Image/system/product/app/Etar ; echo "Remove Etar";
+	rm -rf Image/system/product/app/Jelly ; echo "Remove Jelly";
+	rm -rf Image/system/product/app/Recorder ; echo "Remove Recorder";
+	rm -rf Image/system/product/app/messaging ; echo "Remove messaging";
+	rm -rf Image/system/product/priv-app/Eleven ; echo "Remove Eleven";
+	rm -rf Image/system/product/priv-app/Contacts ; echo "Remove Contacts";
+	rm -rf Image/system/product/app/ExactCalculator ; echo "Remove ExactCalculator";
+	rm -rf Image/system/product/app/Camera2 ; echo "Remove Camera2";
+	rm -rf Image/system/product/app/QuickSearchBox; echo "Remove fucking QuicksearchBox"
+	rm -rf Image/system/product/app/DeskClock; echo "Remove DeskClock"
+	rm -rf Image/system/product/app/Calendar ; echo "Remove Calendar";
+	rm -rf Image/system/product/app/Gallery2 ; echo "Remove Gallery2";
+	rm -rf Image/system/product/app/Browser2 ; echo "Remove Browser2";
+	rm -rf Image/system/system_ext/priv-app/Gallery2 ; echo "Remove Gallery";
+	rm -rf Image/system/system_ext/priv-app/Camera2 ;
+fi
+
+echo ""
+echo "Remove default System Launcher? y/n"
+read
+if [ "${REPLY}" = "y" ]; then 
+	echo "Install Light Android Launcher for safety!"
+	adb install preApps/lalauncher.apk && rm -rf Image/system/system_ext/priv-app/Launcher3QuickStep; echo "Remove Launcher"
+	adb install preApps/Trebuchet.apk
+fi
+
+echo "Remove System File Manager? y/n"
+read
+if [ "${REPLY}" = "y" ]; then 
+	echo "--------------------------------------------"
+	#rm -rf $(cat ./Imagename)/system/priv-app/DocumentsUI, echo "Remove default System Filemanager"
+fi
+
+echo ""
+echo "Install Apps from F-Droid? y/n"
+read
+if [ "${REPLY}" = "y" ]; then 
+	rm -Rf apk_bin > /dev/null
+	mkdir -p apk_bin
+
+	repo="https://f-droid.org/repo/"
+
+	#downloadFromFdroid packageName overrides
+	downloadFromFdroid() {
+		mkdir -p apk_tmp
+		[ "$oldRepo" != "$repo" ] && rm -f apk_tmp/index.xml
+		oldRepo="$repo"
+		if [ ! -f apk_tmp/index.xml ];then
+			#TODO: Check security keys
+			wget --connect-timeout=10 $repo/index.jar -O apk_tmp/index.jar
+			unzip -p apk_tmp/index.jar index.xml > apk_tmp/index.xml
+		fi
+		marketvercode="$(xmlstarlet sel -t -m '//application[id="'"$1"'"]' -v ./marketvercode apk_tmp/index.xml || true)"
+		apk="$(xmlstarlet sel -t -m '//application[id="'"$1"'"]/package[versioncode="'"$marketvercode"'"]' -v ./apkname apk_tmp/index.xml || xmlstarlet sel -t -m '//application[id="'"$1"'"]/package[1]' -v ./apkname apk_tmp/index.xml)"
+		if [ ! -f bin/$apk ];then
+			while ! wget --connect-timeout=10 $repo/$apk -O apk_bin/$apk;do sleep 1;done
+		fi
+		echo "$apk wird installiert: "
+		adb install apk_bin/$apk
+	}
+
+	downloadFromFdroid org.fdroid.fdroid "F-Droid"
+	downloadFromFdroid org.fdroid.fdroid.privileged "F-Droid-Privileged"
+	downloadFromFdroid com.kunzisoft.keepass.libre "keepass"
+	downloadFromFdroid at.bitfire.davdroid "davdroid"
+fi
+
+echo ""
+echo "remove 'bootanimation'? y/n"
+read
+if [ "${REPLY}" = "y" ]; then  
+	echo ""
+	rm -rf $(cat ./Imagename)/system/product/media/bootanimation*.zip
+fi
+
+echo "Install 'bootanimation'? y/n"
+read
+if [ "${REPLY}" = "y" ]; then  
+	echo ""
+	cp -f mybootanimation/bootanimation.zip Image/system/product/media/bootanimation.zip
+fi
+
+echo "fine"
+
