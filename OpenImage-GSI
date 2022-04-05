@@ -22,31 +22,37 @@ read run
 echo "$1"
 
 #set -ex
+touch .Imagename && echo "$1" > .Imagename
+Image="$(cat .Imagename)"
+BaseName="$(basename $Image .img)"
+DirName="Dir_$BaseName"
+MountImg="Mount_$BaseName"
+NewImage="New_$BaseName"
+
 
 if [ "$run" = "m" ]; then
 	#cleanups
-	umount Image &> /dev/null
-	touch .Imagename && echo "$1" > .Imagename
+	umount $DirName &> /dev/null
 	echo "MOUNT"
-	rm -Rf tmp Image
-	mkdir -p tmp Image 
-	simg2img $1 I.img || cp $1 I.imgg
-	e2fsck -n I.img > /dev/null
+	rm -Rf tmp $BaseName
+	mkdir -p tmp $DirName
+	simg2img $Image $MountImg.img || cp $Image $MountImg.imgg
+	e2fsck -n $MountImg.img > /dev/null
 	if [ $? -eq 0 ]; then 
 		echo "Image I.img okay"
-		e2fsck -y -f I.img
-		resize2fs I.img 3500M
-		e2fsck -E unshare_blocks -y -f I.img
-		mount -o loop,rw I.img Image
+		e2fsck -y -f $MountImg.img
+		resize2fs $MountImg.img 3500M
+		e2fsck -E unshare_blocks -y -f $MountImg.img
+		mount -o loop,rw $MountImg.img $DirName
 	fi
 
-	e2fsck -n I.imgg > /dev/null
+	e2fsck -n $MountImg.imgg > /dev/null
 	if [ $? -eq 0 ]; then 
 		echo "Image I.imgg okay"
-		e2fsck -y -f I.img
-		resize2fs I.imgg 3500M
-		e2fsck -E unshare_blocks -y -f I.imgg
-		mount -o loop,rw I.imgg Image
+		e2fsck -y -f $MountImg.img
+		resize2fs $MountImg.imgg 3500M
+		e2fsck -E unshare_blocks -y -f $MountImg.imgg
+		mount -o loop,rw $MountImg.imgg $DirName
 	fi
 elif [ "$run" = "u" ]; then
 	echo ""
@@ -57,44 +63,49 @@ elif [ "$run" = "u" ]; then
 	fi
 	
 	echo ""
-	if [ ! -e Image/system/phh/secure ]; then
+	if [ ! -e $Image/system/phh/secure ]; then
 		echo "Do you want to remove 'superuser'? y/n"
 		read
 		if [ "${REPLY}" = "y" ]; then	
-			touch Image/system/phh/secure
-			rm Image/system/xbin/su
-			rm Image/system/bin/phh-su
-			rm Image/system/etc/init/su.rc
-			rm Image/system/bin/phh-securize.sh
-			rm -Rf Image/system/{app,priv-app}/me.phh.superuser/
+			touch $DirName/system/phh/secure
+			rm $DirName/system/xbin/su
+			rm $DirName/system/bin/phh-su
+			rm $DirName/system/etc/init/su.rc
+			rm $DirName/system/bin/phh-securize.sh
+			rm -Rf $DirName/system/{app,priv-app}/me.phh.superuser/
 		fi
 	fi
-		
+	
+	echo "Pause. Controll yor changes."
+	read
+	
 	echo "UnMount"
-	umount Image
+	umount $DirName
 	sleep 1
 	
-	touch NewImage.img
+	touch $NewImage.img
 	DEVICES=$(adb devices | grep "device$" | sed -e "s|device||g")
 	echo $DEVICES
 	echo "Write changes? y/n"
 	read
 	if [ "${REPLY}" != "y" ]; then exit; fi 
-		e2fsck -n I.img > /dev/null
+		e2fsck -n $MountImg.img > /dev/null
 		if [ $? -eq 0 ]; then 
-			e2fsck -f -y I.img || true
-			resize2fs -M I.img
+			e2fsck -f -y $MountImg.img || true
+			resize2fs -M $MountImg.img
 			sleep 1
-			cp I.img New-Image.img
+			cp $MountImg.img $NewImage.img
 		fi
-		e2fsck -n I.imgg > /dev/null
+		e2fsck -n $MountImg.imgg > /dev/null
 		if [ $? -eq 0 ]; then 
-			e2fsck -f -y I.imgg || true
-			resize2fs -M I.imgg
+			e2fsck -f -y $MountImg.imgg || true
+			resize2fs -M $MountImg.imgg
 			sleep 1
-			cp I.imgg New-Image.img
+			cp $MountImg.imgg $NewImage.img
 		fi
-	rm -f .Imagename
+	sleep 1
+	rm -f Mount_*.img*
+	rm -r Dir_*
 		
 	echo ""
 	echo "Copy to Mobil SDCard and restart to TRWP? y/n"
@@ -109,7 +120,8 @@ elif [ "$run" = "u" ]; then
 		echo ""
 		echo "Detected $DEVICES on adb"
 		echo ""
-		adb push NewImage.img /sdcard && adb reboot recovery
+		adb push $NewImage.img /storage/3B43-1220 && adb reboot recovery
+		#adb push NewImage.img /sdcard && adb reboot recovery
 	fi
 fi 
 
