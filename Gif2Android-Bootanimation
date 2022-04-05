@@ -1,0 +1,71 @@
+#!/bin/bash
+
+usage="Usage: 
+- Erstes Argument: das Gif
+- Zweites Argument: das Verzeichnis, in dem die Bilder Landen sollen
+- Drittes Argument: Die Breite des Bildes
+-----------------------------------------
+Sample: sample.gif Dir 1080"
+
+
+if [ $# -lt 3 ]; then echo "Not enough arguments - exiting"; echo -e "$usage"; exit 1; fi
+
+# egrep -c 'GIF' $1
+if [ "$(egrep -c 'GIF' $1)" = "0" ]; then echo "$1 ist KEIN GIF!"; exit -1; fi
+
+echo "Los geht's ...."
+
+# kein Verzeichnis erstellt?
+if [ -d "$2" ]; then 
+	echo -e "In $2 schreiben ...  \ndas kann dauern ..."; 
+else 
+	echo "Verzeichnis $2 erstellen? Y/n";
+	read
+	if [ "${REPLY}" = "Y" ]; then mkdir $2; else exit 0; fi 
+fi
+
+# einzelen Bilder aus gif
+gm convert ${1} -coalesce +adjoin "$2/%0d.png"
+
+cd $2
+
+for file in *; do
+	# resize falls noetig
+	# 1624 x 540 ist lineage
+	convert $file -resize $3! $file;	
+	# Nullen voran	
+	i=${#file}
+	cfile=$file
+	while [ $i -le 8 ]; do
+		new="0${cfile}"
+		mv -f $cfile $new
+		cfile=$new
+		((i++))
+	done
+	# Entfernen aller Metadaten 
+	echo $new
+	exiftool -all= $new &> /dev/null
+	rm "${new}_original" &> /dev/null
+	#chown root:root $new
+	#chmod 644 $new
+done
+
+cd ..
+
+echo "bootanimation erstellen? Y/n"
+read
+if [ "${REPLY}" = "Y" ]; then 
+	echo "Geschwindigkeit? (frames per seconds)"
+	echo "sinnvoll =< 60"
+	read fps
+	w=$(identify -format "%w" ${2}/00000.png)
+	h=$(identify -format "%h" ${2}/00000.png)
+	touch desc.txt
+	echo "$w $h $fps" > desc.txt
+	echo "p 0 0 part1" >> desc.txt
+	zip -r -0 bootanimation.zip desc.txt $2
+else
+	exit 0;
+fi
+
+echo "fine"
