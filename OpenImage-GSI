@@ -12,29 +12,109 @@ fi
 
 if [ ! -e "$1" ]; then
 	echo "Error: No Image!"
-	echo "/path/to/system/image Faulty or missing!"
+	echo "/path/to/system/image Faulty or Missing!"
 	exit
 fi
 
 echo "Type 'm' für mount image"
 echo "Type 'u' für unmount image"
-read run
-echo "$1"
+echo "Type 'a' für mount and umount image for change"
+read _run
+#echo "$1"
 
 #set -ex
 touch .Imagename && echo "$1" > .Imagename
+date=$(date '+%Y-%m-%d')
 Image="$(cat .Imagename)"
 BaseName="$(basename $Image .img)"
 DirName="Dir_$BaseName"
 MountImg="Mount_$BaseName"
-NewImage="New_$BaseName"
+NewImage="$date-$BaseName"
 
+# here the removable apps
+remApps="EasterEgg 
+webview
+HTMLViewer 
+PrintSpooler 
+AudioFX 
+Etar 
+Jelly
+Recorder 
+Eleven 
+Contacts 
+ExactCalculator 
+Camera2 QuickSearchBox
+DeskClock 
+Calendar 
+Gallery2 
+Browser2"
 
-if [ "$run" = "m" ]; then
+remove_apps() {
+	echo ""
+	echo "This Apps will remove: $remApps"
+	echo "Remove default Apps and make the new System clean? y/n or a for all"
+	read _remove
+	if [ "$_remove" = "a" ]; then
+		for i in $remApps; do
+			find $Dir_Name -name $i -exec echo {} \;
+			find $Dir_Name -name $i -exec rm -rf {} \;
+		done
+	fi
+	if [ "$_remove" = "y" ]; then
+		for i in $remApps; do
+			echo "Remove $i? y/n"
+			find $Dir_Name -name $i -exec echo {} \;
+			read go
+			if [ "$go" = "y" ]; then
+				find $Dir_Name -name $i -exec rm -rf {} \;
+			fi
+		done
+	fi
+	}
+
+detect_adb () {
+	echo ""
+	DEVICE_model=$(adb shell getprop ro.product.vendor.model 2> /dev/null) 
+	DEVICE_system=$(adb shell getprop ro.product.system_ext.device 2> /dev/null)
+	DEVICE_id=$(adb devices | grep "device$" | sed -e "s|device||g" 2> /dev/null)
+	echo "Model: $DEVICE_model"
+	echo "System: $DEVICE_system"
+	echo "ID: $DEVICE_id"
+	echo ""
+	}
+
+copy_to_mobil() {
+	echo "Copy to Mobil SDCard and restart to TRWP? y/n"
+	read
+	if [ "${REPLY}" = "y" ]; then
+		while :; do
+			detect_adb
+			if [ "$DEVICE_id" != "" ] ; then break; fi
+			echo "No Devices over adb detected"
+			echo "Stop. Now activate adb and continue with <Enter>."
+			read
+		done
+		
+		echo -e "\nDetected $DEVICE_model on adb\n"
+		
+		z=0
+		list=$(adb shell ls /storage)
+		for i in $list; do storage+=("$i"); echo "$z -> $i"; ((z++)); done
+		echo "Dial the number for the destination on your mobile (1, 2, 3,...)."
+		echo "The sd-card is probably a number code."
+
+		read reply_st
+		if [ "$reply_st" != "" ]; then
+			adb push $NewImage.img /storage/${storage[$reply_st]} && adb reboot recovery
+		fi
+	fi
+}
+
+mount_image () {
 	#cleanups
 	umount $DirName &> /dev/null
 	echo "MOUNT"
-	rm -Rf tmp $BaseName
+	rm -Rf tmp $BaseName1
 	mkdir -p tmp $DirName
 	simg2img $Image $MountImg.img || cp $Image $MountImg.imgg
 	e2fsck -n $MountImg.img > /dev/null
@@ -54,29 +134,12 @@ if [ "$run" = "m" ]; then
 		e2fsck -E unshare_blocks -y -f $MountImg.imgg
 		mount -o loop,rw $MountImg.imgg $DirName
 	fi
-elif [ "$run" = "u" ]; then
-	echo ""
-	echo "Kill default Apps and make the new System clean? y/n"
-	read
-	if [ "${REPLY}" = "y" ]; then
-		sudo bash kill_AppsFromImage.sh
-	fi
-	
-	echo ""
-	if [ ! -e $Image/system/phh/secure ]; then
-		echo "Do you want to remove 'superuser'? y/n"
-		read
-		if [ "${REPLY}" = "y" ]; then	
-			touch $DirName/system/phh/secure
-			rm $DirName/system/xbin/su
-			rm $DirName/system/bin/phh-su
-			rm $DirName/system/etc/init/su.rc
-			rm $DirName/system/bin/phh-securize.sh
-			rm -Rf $DirName/system/{app,priv-app}/me.phh.superuser/
-		fi
-	fi
-	
-	echo "Pause. Controll yor changes."
+	}
+
+u_mount_image () {
+	remove_apps
+		
+	echo -e "\nPause. Controll yor changes."
 	read
 	
 	echo "UnMount"
@@ -84,11 +147,10 @@ elif [ "$run" = "u" ]; then
 	sleep 1
 	
 	touch $NewImage.img
-	DEVICES=$(adb devices | grep "device$" | sed -e "s|device||g")
-	echo $DEVICES
+	
 	echo "Write changes? y/n"
-	read
-	if [ "${REPLY}" != "y" ]; then exit; fi 
+	read _change
+	if [ "$_change" != "y" ]; then exit; fi 
 		e2fsck -n $MountImg.img > /dev/null
 		if [ $? -eq 0 ]; then 
 			e2fsck -f -y $MountImg.img || true
@@ -107,22 +169,23 @@ elif [ "$run" = "u" ]; then
 	rm -f Mount_*.img*
 	rm -r Dir_*
 		
-	echo ""
-	echo "Copy to Mobil SDCard and restart to TRWP? y/n"
-	read
-	if [ "${REPLY}" = "y" ]; then
-		if [ "$DEVICES" = "" ]; then
-			echo "No Devices over adb detected"
-			echo "Stop. Now activate adb and continue."
-			echo " Enter for continue"
-			read
-		fi
-		echo ""
-		echo "Detected $DEVICES on adb"
-		echo ""
-		adb push $NewImage.img /storage/3B43-1220 && adb reboot recovery
-		#adb push NewImage.img /sdcard && adb reboot recovery
+	echo "Compress the image additionally? y/n"
+	read _compress
+	if [ "$_compress" == "y" ]; then
+		xz -k -f -v $NewImage.img
 	fi
+	
+	echo ""
+	copy_to_mobil
+	}
+
+if [ "$_run" = "m" ]; then
+	mount_image;
+elif [ "$_run" = "u" ]; then
+	u_mount_image;
+elif [ "$_run" = "a" ]; then
+	mount_image;
+	u_mount_image;
 fi 
 
 echo "fine"
