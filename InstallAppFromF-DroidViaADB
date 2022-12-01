@@ -22,8 +22,6 @@ fi
 rm -Rf apk_bin > /dev/null
 mkdir -p apk_bin
 
-repo="https://f-droid.org/repo/"
-
 #downloadFromFdroid packageName overrides
 downloadFromFdroid() {
 	mkdir -p apk_tmp
@@ -43,6 +41,9 @@ downloadFromFdroid() {
     adb install apk_bin/$apk > /dev/null
     sleep 1
 }
+
+# install this apps from f-droid
+repo="https://f-droid.org/repo/"
 
 echo ""
 echo "remove AOSP keyboard and install anysoftkeyboard? y/n"
@@ -69,8 +70,6 @@ fi
 echo "This install Apps from F-Droid."
 echo "--------------------------------------"
 echo ""
-
-# install this apps
 
 #System
 downloadFromFdroid org.fdroid.fdroid "F-Droid"
@@ -192,7 +191,6 @@ downloadFromFdroid org.videolan.vlc "vlc"
 #YouTube viewer
 repo=https://archive.newpipe.net/fdroid/repo/
 downloadFromFdroid org.schabi.newpipe "Schlanke YouTube-Oberfläche"
-	
 
 echo "Install Neo Launcher? y/n"
 read
