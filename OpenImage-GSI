@@ -84,7 +84,7 @@ detect_adb () {
 	}
 
 copy_to_mobil() {
-	echo "Copy to Mobil SDCard and restart to TRWP? y/n"
+	echo "Copy to Mobil SDCard and restart to Recovery? y/n"
 	read
 	if [ "${REPLY}" = "y" ]; then
 		while :; do
