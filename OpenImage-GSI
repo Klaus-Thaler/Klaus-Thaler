@@ -1,5 +1,5 @@
 #!/bin/bash
-
+#set -ex
 #Usage:
 #bash sudo OpenImage.sh Mountpoint[Variable/String] [/path/to/system/image]
 
@@ -13,6 +13,7 @@ fi
 if [ ! -e "$1" ]; then
 	echo "Error: No Image!"
 	echo "/path/to/system/image Faulty or Missing!"
+	
 	exit
 fi
 
@@ -22,7 +23,6 @@ echo "Type 'a' für mount and umount image for change"
 read _run
 #echo "$1"
 
-#set -ex
 touch .Imagename && echo "$1" > .Imagename
 date=$(date '+%Y-%m-%d')
 Image="$(cat .Imagename)"
@@ -36,18 +36,25 @@ remApps="EasterEgg
 webview
 HTMLViewer 
 PrintSpooler 
-AudioFX 
-Etar 
 Jelly
 Recorder 
 Eleven 
-Contacts 
 ExactCalculator 
-Camera2 QuickSearchBox
-DeskClock 
+QuickSearchBox
 Calendar 
 Gallery2 
-Browser2"
+Browser2
+AudioFX "
+#Etar 
+#Contacts
+#Camera2 
+#DeskClock
+
+check_gsi () {
+	# Make sure to grab the specific GSI package according to your device’s architecture. 
+	echo "Check GSI"
+	adb shell getprop ro.product.cpu.abi
+	}
 
 remove_apps() {
 	echo ""
@@ -57,7 +64,7 @@ remove_apps() {
 	if [ "$_remove" = "a" ]; then
 		for i in $remApps; do
 			find $Dir_Name -name $i -exec echo {} \;
-			find $Dir_Name -name $i -exec rm -rf {} \;
+			find $Dir_Name -name $i -exec rm -rfd {} \;
 		done
 	fi
 	if [ "$_remove" = "y" ]; then
@@ -66,12 +73,129 @@ remove_apps() {
 			find $Dir_Name -name $i -exec echo {} \;
 			read go
 			if [ "$go" = "y" ]; then
-				find $Dir_Name -name $i -exec rm -rf {} \;
+				find $Dir_Name -name $i -exec rm -rfd {} \;
 			fi
 		done
 	fi
 	}
 
+removeSU () {
+	echo ""
+	echo "Remove phh-su? y/n"
+	read _remove
+	if [ "$_remove" = "y" ]; then
+		touch $DirName/system/phh/secure
+		rm $DirName/system/xbin/su
+		rm $DirName/system/bin/phh-su
+		rm $DirName/system/etc/init/su.rc
+		rm $DirName/system/bin/phh-securize.sh
+		rm -Rf $DirName/system/{app,priv-app}/me.phh.superuser/
+	fi
+}
+
+replace_hosts () {
+	echo ""
+	echo "Replace file 'hosts' with IP Blocker? y/n"
+	read _replace
+	if [ "$_replace" = "y" ]; then
+		cp ./hosts $DirName/system/etc/
+		echo ""
+		echo "file 'hosts' now has "$(wc -l < $DirName/system/etc/hosts)" lines"
+	fi
+	}
+
+installApks () {
+	echo ""
+	echo "Install F-Droid extra privileg? y/n"
+	read _install
+	if [ "$_install" = "y" ]; then
+		APK="FDroidPrivilegedExtension"
+		DEST=$DirName/system/priv-app
+		cp -rf ./extraApps/$APK $DEST/$APK
+		chown -R 0.0 $DEST/$APK
+		chmod -R 755 $DEST/$APK
+		echo "FDroidPrivilegedExtension"
+		ls -la $DEST/$APK
+		
+		cat << EOF > $DirName/system/product/etc/permissions/privapp-permissions-org.fdroid.fdroid.privileged.xml
+<?xml version="1.0" encoding="utf-8"?>
+<permissions>
+    <privapp-permissions package="org.fdroid.fdroid.privileged">
+        <permission name="android.permission.DELETE_PACKAGES"/>
+        <permission name="android.permission.INSTALL_PACKAGES"/>
+    </privapp-permissions>
+</permissions>
+EOF
+	fi
+	}
+
+replace_bootanimation() {
+	_file=$(find $DirName -name bootanimation.zip)
+	if [ -e "$_file" ]; then 
+		echo -e "\nIf a custom boot animation was created and"
+		echo -e "placed in this directory as bootanimation.zip,"
+		echo -e "this can be replaced. \n"
+		echo "Replace the boot animation? y/n"
+		#echo "Find this bootanimation: "$_file
+		read
+		if [ "${REPLY}" = "y" ]; then
+			cp -f bootanimation.zip $_file
+		fi
+	fi
+	}
+
+copy_to_mobil() {
+	echo ""
+	while :; do
+		detect_adb
+		if [ "$DEVICE_id" != "" ] ; then break; fi
+		echo "No Devices over adb detected"
+		echo "Stop. Now activate adb and continue with <Enter>."
+		echo "Type 'e' for exit. The name of the new system image is '$NewImage.img(.zip|.xz)'"
+		read
+		if [ "${REPLY}" = "e" ]; then
+			exit 0
+		fi
+	done
+	z=0
+	list=$(adb shell ls /storage)
+	for i in $list; do storage+=("$i"); echo "$z -> $i"; ((z++)); done
+	echo ""
+	echo "Dial the number for the destination on your mobile (1, 2, 3,...)."
+	echo "The sd-card is probably a number code."
+	read reply_st
+	if [ "$reply_st" != "" ]; then
+		adb push Disable_Dm-Verity_ForceEncrypt_03.04.2020.zip /storage/${storage[$reply_st]}		
+	fi
+	echo "Do you have a custom recovery (twrp) or do you want to flash with fastboot?"
+	echo "Type 'c' for transfer to sd card via adb."
+	echo "Type 'f' for flash with fastboot."
+	read 
+	if [ "${REPLY}" = "c" ]; then
+		if [ "$reply_st" != "" ]; then
+			adb push vbmeta.img /storage/${storage[$reply_st]}
+			adb push $NewImage.img /storage/${storage[$reply_st]} && adb reboot recovery		
+		fi
+	fi
+	if [ "${REPLY}" = "f" ]; then
+		adb reboot fastboot
+		sleep 1
+		fastboot flash system $NewImage.img
+	fi
+}
+
+zip_image () {
+	echo "Compress the image additionally and exit?"
+	echo "Type 'z' for zip or 'x' for xz."
+	read _compress
+	if [ "$_compress" == "x" ]; then
+		xz -k -f -v $NewImage.img
+	fi
+	if [ "$_compress" == "z" ]; then
+		zip -q $NewImage.img.zip $NewImage.img
+	fi
+	}
+	
 detect_adb () {
 	echo ""
 	DEVICE_model=$(adb shell getprop ro.product.vendor.model 2> /dev/null) 
@@ -81,34 +205,9 @@ detect_adb () {
 	echo "System: $DEVICE_system"
 	echo "ID: $DEVICE_id"
 	echo ""
+	echo "This devivce is '$(adb shell getprop ro.product.cpu.abi)'."
+	echo ""
 	}
-
-copy_to_mobil() {
-	echo "Copy to Mobil SDCard and restart to Recovery? y/n"
-	read
-	if [ "${REPLY}" = "y" ]; then
-		while :; do
-			detect_adb
-			if [ "$DEVICE_id" != "" ] ; then break; fi
-			echo "No Devices over adb detected"
-			echo "Stop. Now activate adb and continue with <Enter>."
-			read
-		done
-		
-		echo -e "\nDetected $DEVICE_model on adb\n"
-		
-		z=0
-		list=$(adb shell ls /storage)
-		for i in $list; do storage+=("$i"); echo "$z -> $i"; ((z++)); done
-		echo "Dial the number for the destination on your mobile (1, 2, 3,...)."
-		echo "The sd-card is probably a number code."
-
-		read reply_st
-		if [ "$reply_st" != "" ]; then
-			adb push $NewImage.img /storage/${storage[$reply_st]} && adb reboot recovery
-		fi
-	fi
-}
 
 mount_image () {
 	#cleanups
@@ -138,6 +237,10 @@ mount_image () {
 
 u_mount_image () {
 	remove_apps
+	removeSU
+	replace_hosts
+	replace_bootanimation
+	installApks
 		
 	echo -e "\nPause. Controll yor changes."
 	read
@@ -168,14 +271,8 @@ u_mount_image () {
 	sleep 1
 	rm -f Mount_*.img*
 	rm -r Dir_*
-		
-	echo "Compress the image additionally? y/n"
-	read _compress
-	if [ "$_compress" == "y" ]; then
-		xz -k -f -v $NewImage.img
-	fi
-	
 	echo ""
+	zip_image
 	copy_to_mobil
 	}
 
