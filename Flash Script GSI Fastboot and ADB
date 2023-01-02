@@ -94,11 +94,15 @@ removeSU () {
 }
 
 replace_hosts () {
-	# my hosts file: https://raw.githubusercontent.com/Klaus-Thaler/Klaus-Thaler/main/hosts
+	# my hosts file https://raw.githubusercontent.com/Klaus-Thaler/Klaus-Thaler/main/hosts
 	echo ""
 	echo "Replace file 'hosts' with IP Blocker? y/n"
 	read _replace
 	if [ "$_replace" = "y" ]; then
+		if [ -f hosts ]; then 
+			rm -f hosts
+			wget https://raw.githubusercontent.com/Klaus-Thaler/Klaus-Thaler/main/hosts
+		fi
 		cp ./hosts $DirName/system/etc/
 		echo ""
 		echo "file 'hosts' now has "$(wc -l < $DirName/system/etc/hosts)" lines"
