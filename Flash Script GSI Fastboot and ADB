@@ -94,6 +94,7 @@ removeSU () {
 }
 
 replace_hosts () {
+	# my hosts file: https://raw.githubusercontent.com/Klaus-Thaler/Klaus-Thaler/main/hosts
 	echo ""
 	echo "Replace file 'hosts' with IP Blocker? y/n"
 	read _replace
